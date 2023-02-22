@@ -1,3 +1,4 @@
+use std::env;
 use std::error;
 use std::fmt::Debug;
 use std::fs;
@@ -18,8 +19,7 @@ use tapo::{ApiClient, P110};
 use tokio::time;
 use tokio::time::sleep;
 
-const CONFIG_PATH: &str = "config.toml";
-
+const DEFAULT_CONFIG_PATH: &str = "./config.toml";
 const DEFAULT_INTERVAL: Duration = Duration::from_secs(10);
 const DEFAULT_REPORT_BATCH_SIZE: usize = 5;
 
@@ -174,12 +174,17 @@ struct ClientConfig {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn error::Error>> {
-    let config = match fs::read_to_string(CONFIG_PATH) {
+    let config_path = &env::args()
+        .skip(1)
+        .next()
+        .unwrap_or(DEFAULT_CONFIG_PATH.to_owned());
+
+    let config = match fs::read_to_string(config_path) {
         Ok(config_string) => toml::from_str::<Config>(&config_string),
         Err(e) => {
             if e.kind() == NotFound {
                 fs::write(
-                    CONFIG_PATH,
+                    config_path,
                     if cfg!(debug_assertions) {
                         toml::to_string(&Config::default())
                             .expect("Could not serialize default config!")
@@ -187,9 +192,9 @@ async fn main() -> Result<(), Box<dyn error::Error>> {
                         include_str!("example-config.toml").to_owned()
                     },
                 )
-                .unwrap_or_else(|_| panic!("Could not write {CONFIG_PATH} config!"));
+                .unwrap_or_else(|_| panic!("Could not write {config_path} config!"));
             }
-            panic!("Could not read {CONFIG_PATH}!")
+            panic!("Could not read {config_path}!")
         }
     }
     .unwrap_or_else(|e| {
