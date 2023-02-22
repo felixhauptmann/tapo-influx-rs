@@ -1,0 +1,26 @@
+report_batch_size = 10      # optional (default: 10)
+log_level = "Info"          # optional (default: Info) [Off, Error, Warn, Info, Debug, Trace]
+
+[db]                        # mandatory
+influx_host = "https://yourdatacenter.influxdata.com"
+influx_org = "org"
+influx_token = "token"
+influx_bucket = "bucket"
+
+[tapo]
+default_interval = 5        # optional (default: 5)
+
+[tapo.default_credentials]  # optional if credentials are specified for all clients
+username = "username"
+password = "password"
+
+[[tapo.clients]]
+ip = "192.168.178.101"
+
+[[tapo.clients]]
+ip = "192.168.178.102"
+interval = 60               # optional (overrides default interval)
+
+[tapo.clients.credentials]  # optional if default credentials are specified
+username = "username"
+password = "password102"
