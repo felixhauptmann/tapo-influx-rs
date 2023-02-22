@@ -1,3 +1,4 @@
+use std::cmp::min;
 use std::env;
 use std::error;
 use std::fmt::Debug;
@@ -203,10 +204,15 @@ async fn main() -> Result<(), Box<dyn error::Error>> {
 
     let level_filter = config.log_level.unwrap_or(LogLevel::Info).into();
 
-    SimpleLogger::new()
-        .with_level(level_filter)
-        .init()
-        .expect("Could not initialize logger!");
+    if cfg!(debug_assertions) {
+        SimpleLogger::new().with_level(level_filter)
+    } else {
+        SimpleLogger::new()
+            .with_level(min(level_filter, LevelFilter::Info))
+            .with_module_level(module_path!(), level_filter)
+    }
+    .init()
+    .expect("Could not initialize logger!");
 
     let influx_client = config.get_influx_client();
 
