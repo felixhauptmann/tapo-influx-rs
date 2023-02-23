@@ -204,6 +204,8 @@ async fn main() -> Result<(), Box<dyn error::Error>> {
         panic!("Unable to parse config.toml: {e}");
     });
 
+    debug!("Config parsed: {config:#?}");
+
     let level_filter = config.log_level.unwrap_or(LogLevel::Info).into();
 
     if config.log_lib.unwrap_or(false) {
@@ -216,12 +218,17 @@ async fn main() -> Result<(), Box<dyn error::Error>> {
     .init()
     .expect("Could not initialize logger!");
 
+    debug!("Logger initialized. Level: {}", level_filter);
+
     let influx_client = config.get_influx_client();
+    debug!("Influx Client instantiated");
 
     let clients = config.get_clients().await;
+    debug!("Instantiated {} Tapo clients", clients.len());
 
     ctrlc::set_handler(stop).expect("Error setting Ctrl-C handler!");
 
+    debug!("Processing clients... (CTRL-C to stop execution)");
     process_clients(
         influx_client,
         config.db.influx_bucket,
