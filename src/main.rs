@@ -32,6 +32,7 @@ struct Config {
     db: DbConfig,
     report_batch_size: Option<usize>,
     log_level: Option<LogLevel>,
+    log_lib: Option<bool>,
 }
 
 impl Config {
@@ -118,6 +119,7 @@ impl Default for Config {
                 influx_bucket: "bucket".to_owned(),
             },
             report_batch_size: Some(10),
+            log_lib: None,
         }
     }
 }
@@ -204,7 +206,7 @@ async fn main() -> Result<(), Box<dyn error::Error>> {
 
     let level_filter = config.log_level.unwrap_or(LogLevel::Info).into();
 
-    if cfg!(debug_assertions) {
+    if config.log_lib.unwrap_or(false) {
         SimpleLogger::new().with_level(level_filter)
     } else {
         SimpleLogger::new()
