@@ -1540,7 +1540,8 @@ checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
 [[package]]
 name = "tapo"
 version = "0.3.1"
-source = "git+https://github.com/felixhauptmann/tapo.git?branch=hotfix-optional-energy-usage#deedf6983c653f98b2f9fc94315a0ce3ad705ac5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fb1bf86e93deb8ddb2dc31d50949ca9924ab3d6e1e4d20144fa2906fda087f81"
 dependencies = [
  "anyhow",
  "base16ct",

@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tapo = { git = "https://github.com/felixhauptmann/tapo.git", branch = "hotfix-optional-energy-usage" }
+tapo = "0.3.1"
 tokio = { version = "1.25.0", features = ["macros", "rt-multi-thread"] }
 log = "0.4.17"
 simple_logger = "4.0.0"
