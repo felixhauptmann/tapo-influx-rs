@@ -1,6 +1,6 @@
 use std::cmp::min;
 use std::env;
-use std::error;
+use std::error::Error;
 use std::fmt::Debug;
 use std::fs;
 use std::io::ErrorKind::NotFound;
@@ -12,7 +12,7 @@ use futures::stream;
 use influxdb2::api::write::TimestampPrecision;
 use influxdb2::models::{DataPoint, WriteDataPoint};
 use influxdb2::Client as InfluxClient;
-use log::{debug, error, info, LevelFilter};
+use log::{debug, error, info, warn, LevelFilter};
 use serde::{Deserialize, Serialize};
 use simple_logger::SimpleLogger;
 use tapo::responses::EnergyUsageResult;
@@ -66,12 +66,13 @@ impl Config {
             .collect();
 
         let mut clients = Vec::new();
-
-        for client in client_creds
-            .into_iter()
-            .map(|(ip, credentials, interval)| Client::new(ip, credentials, interval))
-        {
-            clients.push(client.await)
+        for (ip, credentials, interval) in client_creds.into_iter() {
+            let client = Client::new(ip.clone(), credentials, interval);
+            if let Ok(client) = client.await {
+                clients.push(client)
+            } else {
+                warn!("Could not connect to client with ip {}", ip)
+            }
         }
 
         clients
@@ -176,7 +177,7 @@ struct ClientConfig {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn error::Error>> {
+async fn main() -> Result<(), Box<dyn Error>> {
     let config_path = &env::args()
         .skip(1)
         .next()
@@ -249,7 +250,7 @@ async fn process_clients(
     bucket: String,
     batch_size: usize,
     clients: Vec<Client>,
-) -> Result<(), Box<dyn error::Error>> {
+) -> Result<(), Box<dyn Error>> {
     let (tx, rx) = channel();
 
     for mut client in clients {
@@ -378,28 +379,28 @@ struct Client {
 }
 
 impl Client {
-    async fn new(ip: String, credentials: TapoCredentials, interval: Option<Duration>) -> Self {
-        let device = ApiClient::<P110>::new(ip, credentials.username, credentials.password, true)
-            .await
-            .expect("Could not create Client!");
-        let device_info = device
-            .get_device_info()
-            .await
-            .expect("Could not get device info!");
+    async fn new(
+        ip: String,
+        credentials: TapoCredentials,
+        interval: Option<Duration>,
+    ) -> Result<Self, Box<dyn Error>> {
+        let device =
+            ApiClient::<P110>::new(ip, credentials.username, credentials.password, true).await?;
+        let device_info = device.get_device_info().await?;
         let device_id = device_info.device_id;
 
-        Self {
+        Ok(Self {
             device,
             device_id,
             interval,
-        }
+        })
     }
 
-    async fn login(&mut self) -> Result<(), Box<dyn error::Error>> {
+    async fn login(&mut self) -> Result<(), Box<dyn Error>> {
         Ok(self.device.login().await?)
     }
 
-    async fn record_data(&mut self) -> Result<Measurement, Box<dyn error::Error>> {
+    async fn record_data(&mut self) -> Result<Measurement, Box<dyn Error>> {
         let energy_usage = self.device.get_energy_usage().await?;
         Ok(Measurement::from_result(
             &energy_usage,
