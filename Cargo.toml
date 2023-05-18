@@ -6,11 +6,11 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tapo = "0.3.1"
+tapo = "0.5.0"
 tokio = { version = "1.25.0", features = ["macros", "rt-multi-thread"] }
 log = "0.4.17"
 simple_logger = "4.0.0"
-influxdb2 = "0.4"
+influxdb2 = "0.4.0"
 futures = "0.3.26"
 ctrlc = "3.2.5"
 toml = "0.7.2"

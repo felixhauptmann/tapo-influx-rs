@@ -76,9 +76,9 @@ checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 
 [[package]]
 name = "base16ct"
-version = "0.1.1"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "349a06037c7bf932dd7e7d1f653678b2038b9ad46a74102f1fc7bd7872678cce"
+checksum = "4c7f02d4ea65f2c1853089ffd8d2787bdbc63de2f0d29dedbcf8ccdfa0ccd4cf"
 
 [[package]]
 name = "base64"
@@ -1499,9 +1499,9 @@ dependencies = [
 
 [[package]]
 name = "tapo"
-version = "0.3.1"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb1bf86e93deb8ddb2dc31d50949ca9924ab3d6e1e4d20144fa2906fda087f81"
+checksum = "099af362b501d8ad366c8f8180c850c32f762de32fe75570dd43d5c62e1d8b95"
 dependencies = [
  "anyhow",
  "base16ct",
@@ -1512,6 +1512,7 @@ dependencies = [
  "openssl",
  "serde",
  "serde_json",
+ "thiserror",
  "time 0.3.21",
 ]
 

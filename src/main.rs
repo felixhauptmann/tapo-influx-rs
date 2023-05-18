@@ -1,6 +1,5 @@
 use std::cmp::min;
 use std::env;
-use std::error::Error;
 use std::fmt::Debug;
 use std::fs;
 use std::io::ErrorKind::NotFound;
@@ -12,13 +11,12 @@ use futures::stream;
 use influxdb2::api::write::TimestampPrecision;
 use influxdb2::models::{DataPoint, WriteDataPoint};
 use influxdb2::Client as InfluxClient;
-use log::{debug, error, info, warn, LevelFilter};
+use log::{debug, error, info, LevelFilter};
 use serde::{Deserialize, Serialize};
 use simple_logger::SimpleLogger;
 use tapo::responses::EnergyUsageResult;
-use tapo::{ApiClient, P110};
+use tapo::{ApiClient, Authenticated, P110Handler};
 use tokio::time;
-use tokio::time::sleep;
 
 const DEFAULT_CONFIG_PATH: &str = "./config.toml";
 const DEFAULT_INTERVAL: Duration = Duration::from_secs(10);
@@ -44,7 +42,7 @@ impl Config {
         )
     }
 
-    async fn get_clients(&self) -> Vec<Client> {
+    fn get_clients(&self) -> Vec<Device> {
         let client_creds: Vec<_> = self
             .tapo
             .clients
@@ -67,12 +65,8 @@ impl Config {
 
         let mut clients = Vec::new();
         for (ip, credentials, interval) in client_creds.into_iter() {
-            let client = Client::new(ip.clone(), credentials, interval);
-            if let Ok(client) = client.await {
-                clients.push(client)
-            } else {
-                warn!("Could not connect to client with ip {}", ip)
-            }
+            let client = Device::new(ip.clone(), credentials, interval);
+            clients.push(client)
         }
 
         clients
@@ -177,7 +171,7 @@ struct ClientConfig {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+async fn main() {
     let config_path = &env::args()
         .skip(1)
         .next()
@@ -224,7 +218,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let influx_client = config.get_influx_client();
     debug!("Influx Client instantiated");
 
-    let clients = config.get_clients().await;
+    let clients = config.get_clients();
     debug!("Instantiated {} Tapo clients", clients.len());
 
     ctrlc::set_handler(stop).expect("Error setting Ctrl-C handler!");
@@ -238,19 +232,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .unwrap_or(DEFAULT_REPORT_BATCH_SIZE),
         clients,
     )
-    .await?;
+    .await;
 
     info!("Terminating");
-
-    Ok(())
 }
 
 async fn process_clients(
     influx_client: InfluxClient,
     bucket: String,
     batch_size: usize,
-    clients: Vec<Client>,
-) -> Result<(), Box<dyn Error>> {
+    clients: Vec<Device>,
+) {
     let (tx, rx) = channel();
 
     for mut client in clients {
@@ -262,7 +254,6 @@ async fn process_clients(
             loop {
                 interval.tick().await;
 
-                let mut login = false;
                 match client.record_data().await {
                     Ok(measurement) => {
                         debug!("Measurement recorded: {:?}", measurement);
@@ -271,15 +262,18 @@ async fn process_clients(
                     }
                     Err(e) => {
                         error!("Could not record measurement! {}", e);
-                        login = true;
+                        // match e {
+                        //     tapo::Error::Tapo(_) => {}
+                        //     tapo::Error::Validation { .. } => {}
+                        //     tapo::Error::Serde(_) => {}
+                        //     tapo::Error::Http(_) => {
+                        //         // sleep(Duration::from_secs(30)).await; // if not reachable wait...
+                        //     }
+                        //     tapo::Error::Other(_) => {}
+                        //     _ => {}
+                        // }
                     }
                 };
-
-                if login {
-                    while client.login().await.is_err() {
-                        sleep(Duration::from_secs(30)).await;
-                    }
-                }
 
                 if !is_running() {
                     break;
@@ -309,8 +303,6 @@ async fn process_clients(
             break;
         }
     }
-
-    Ok(())
 }
 
 fn stop() {
@@ -373,38 +365,50 @@ impl From<&Measurement> for DataPoint {
 }
 
 struct Client {
-    device: ApiClient<P110>,
+    handler: P110Handler<Authenticated>,
     device_id: String,
-    interval: Option<Duration>,
 }
 
 impl Client {
-    async fn new(
-        ip: String,
-        credentials: TapoCredentials,
-        interval: Option<Duration>,
-    ) -> Result<Self, Box<dyn Error>> {
-        let device =
-            ApiClient::<P110>::new(ip, credentials.username, credentials.password, true).await?;
-        let device_info = device.get_device_info().await?;
+    async fn new(ip: String, credentials: TapoCredentials) -> Result<Client, tapo::Error> {
+        let handler = ApiClient::new(ip, credentials.username, credentials.password)?.p110();
+        let handler = handler.login().await?;
+        let device_info = handler.get_device_info().await?;
         let device_id = device_info.device_id;
+        Ok(Client { handler, device_id })
+    }
+}
 
-        Ok(Self {
-            device,
-            device_id,
+struct Device {
+    ip: String,
+    credentials: TapoCredentials,
+    client: Option<Client>,
+    interval: Option<Duration>,
+}
+
+impl Device {
+    fn new(ip: String, credentials: TapoCredentials, interval: Option<Duration>) -> Self {
+        Self {
+            ip,
+            credentials,
+            client: None,
             interval,
-        })
+        }
     }
 
-    async fn login(&mut self) -> Result<(), Box<dyn Error>> {
-        Ok(self.device.login().await?)
-    }
+    async fn record_data(&mut self) -> Result<Measurement, tapo::Error> {
+        let client = if let Some(client) = &self.client {
+            client
+        } else {
+            let client = Client::new(self.ip.clone(), self.credentials.clone()).await?;
+            self.client = Some(client);
+            self.client.as_ref().unwrap()
+        };
 
-    async fn record_data(&mut self) -> Result<Measurement, Box<dyn Error>> {
-        let energy_usage = self.device.get_energy_usage().await?;
+        let energy_usage = client.handler.get_energy_usage().await?;
         Ok(Measurement::from_result(
             &energy_usage,
-            self.device_id.clone(),
+            client.device_id.clone(),
         ))
     }
 }
